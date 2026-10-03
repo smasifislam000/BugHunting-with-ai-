@@ -1,0 +1,4 @@
+__proto__[polluted]=yes
+__proto__.polluted=yes
+constructor[prototype][polluted]=yes
+constructor.prototype.polluted=yes
