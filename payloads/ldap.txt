@@ -1,0 +1,6 @@
+*)(uid=*
+*)(|(uid=*
+admin)(&)
+*)(cn=*
+*))%00
+*)(objectClass=*
