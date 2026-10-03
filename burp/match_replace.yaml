@@ -1,0 +1,89 @@
+# burp/match_replace.yaml
+# ---------------------------------------------
+# WAF Bypass & Attack Headers
+# Loaded into Burp Suite Pro via:
+#   Extensions → MCP → Match & Replace Rules
+# Or imported manually:
+#   Settings → Tools → Proxy → Match and Replace
+# ---------------------------------------------
+
+rules:
+  # ── IP Spoofing Headers (WAF bypass) ──
+  - name: "X-Forwarded-For localhost"
+    type: request_header
+    match: ""
+    replace: "X-Forwarded-For: 127.0.0.1"
+    enabled: true
+
+  - name: "X-Originating-IP localhost"
+    type: request_header
+    match: ""
+    replace: "X-Originating-IP: 127.0.0.1"
+    enabled: true
+
+  - name: "X-Remote-IP localhost"
+    type: request_header
+    match: ""
+    replace: "X-Remote-IP: 127.0.0.1"
+    enabled: true
+
+  - name: "X-Remote-Addr localhost"
+    type: request_header
+    match: ""
+    replace: "X-Remote-Addr: 127.0.0.1"
+    enabled: true
+
+  - name: "X-Client-IP localhost"
+    type: request_header
+    match: ""
+    replace: "X-Client-IP: 127.0.0.1"
+    enabled: true
+
+  - name: "X-Real-IP localhost"
+    type: request_header
+    match: ""
+    replace: "X-Real-IP: 127.0.0.1"
+    enabled: true
+
+  - name: "X-Forwarded-Host override"
+    type: request_header
+    match: ""
+    replace: "X-Forwarded-Host: localhost"
+    enabled: true
+
+  # ── User-Agent rotation ──
+  - name: "Modern Chrome UA"
+    type: request_header
+    match: "^User-Agent.*"
+    replace: "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
+    enabled: false
+
+  # ── Force HTTP/1.1 to avoid HTTP/2-only bypasses ──
+  - name: "Strip Alt-Svc"
+    type: request_header
+    match: "^Alt-Svc.*"
+    replace: ""
+    enabled: false
+
+  # ── Content-Type override for JSON APIs ──
+  - name: "JSON Content-Type (conditional)"
+    type: request_header
+    match: "^Content-Type: application/x-www-form-urlencoded$"
+    replace: "Content-Type: application/json"
+    enabled: false
+
+  # ── Response: leak interesting headers back for reporting ──
+  - name: "Highlight Server header"
+    type: response_header
+    match: "^Server: (.*)$"
+    replace: "Server: $1"
+    enabled: true
+
+# ────────────────────────────────────────────
+# Load instructions:
+#   1. Open Burp Suite Pro.
+#   2. Settings → Tools → Proxy → Match and Replace.
+#   3. Click "Import" and select this file (Burp accepts YAML).
+#   4. Enable the rules you want (avoid IP spoofing on prod targets
+#      unless explicitly allowed by program scope).
+# ────────────────────────────────────────────
