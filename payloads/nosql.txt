@@ -1,0 +1,7 @@
+{"username": {"$ne": null}, "password": {"$ne": null}}
+{"username": {"$gt": ""}, "password": {"$gt": ""}}
+{"username": "admin", "password": {"$regex": ".*"}}
+[$ne]=1
+[$gt]=
+[$regex]=.*
+[$exists]=true
