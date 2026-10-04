@@ -1,12 +1,23 @@
 """
 core/core.py
 ------------
-MAIN ORCHESTRATOR
-Chains: recon → scan → modules → intel → triage → report.
+Dream Framework — MAIN ORCHESTRATOR (FINAL)
+
+Chains:
+  recon → scanner → advanced modules → intel → AI proof → AI triage → reports → verification
+
+AI Modes:
+  - auto:        only Critical needs manual approval (default)
+  - hybrid:      High + Critical need approval
+  - checkpoint:  all Medium+ need approval
+
 Usage:
   python3 -m core.core --target example.com --full
   python3 -m core.core --target example.com --recon-only
-  python3 -m core.core --target example.com --report-only
+  python3 -m core.core --target example.com --modules jwt_attack,ssti
+  python3 -m core.core --target example.com --review
+  python3 -m core.core --target example.com --review-verify
+  python3 -m core.core --target example.com --report-only --scan-id 3
 """
 
 import sys
@@ -26,74 +37,128 @@ cfg = get_config()
 
 
 # ─────────────────────────────────────────
-# Ordered module registry
+# AI mode policy
+# ─────────────────────────────────────────
+AI_MODES = {
+    "auto": {
+        "info": "auto", "low": "auto",
+        "medium": "auto_notify", "high": "auto_notify",
+        "critical": "manual_approval",
+    },
+    "hybrid": {
+        "info": "auto", "low": "auto",
+        "medium": "auto_notify", "high": "manual_approval",
+        "critical": "manual_approval",
+    },
+    "checkpoint": {
+        "info": "auto", "low": "auto_notify",
+        "medium": "manual_approval", "high": "manual_approval",
+        "critical": "manual_approval",
+    },
+}
+
+
+def get_ai_mode() -> str:
+    mode = cfg.get("ai_mode.default", "auto")
+    if mode not in AI_MODES:
+        mode = "auto"
+    return mode
+
+
+def requires_manual_approval(severity: str) -> bool:
+    mode = get_ai_mode()
+    policy = AI_MODES.get(mode, AI_MODES["auto"])
+    action = policy.get((severity or "info").lower(), "auto")
+    return action == "manual_approval"
+
+
+# ─────────────────────────────────────────
+# Module registry (all advanced modules)
 # ─────────────────────────────────────────
 MODULE_REGISTRY = [
-    # (name, import_path, function_attr, needs_params)
-    ("jwt_attack",          "modules.jwt_attack",          "run", False),
-    ("oauth_test",          "modules.oauth_test",          "run", False),
-    ("graphql_test",        "modules.graphql_test",        "run", False),
-    ("cloud_enum",          "modules.cloud_enum",          "run", False),
-    ("cloud_metadata",      "modules.cloud_metadata",      "run", True),
-    ("open_api",            "modules.open_api",            "run", False),
-    ("cname_takeover",      "modules.cname_takeover",      "run", False),
-    ("sensitive_files",     "modules.sensitive_files",     "run", False),
-    ("ssti",                "modules.ssti",                "run", True),
-    ("nosql",               "modules.nosql",               "run", True),
-    ("crlf_injection",      "modules.crlf_injection",      "run", True),
-    ("ldap_injection",      "modules.ldap_injection",      "run", True),
-    ("xxe",                 "modules.xxe",                 "run", False),
-    ("deserialization",     "modules.deserialization",     "run", False),
-    ("prototype_pollution", "modules.prototype_pollution", "run", False),
-    ("postmessage",         "modules.postmessage",         "run", False),
-    ("dom_clobbering",      "modules.dom_clobbering",      "run", False),
-    ("css_injection",       "modules.css_injection",       "run", True),
-    ("dangling_markup",     "modules.dangling_markup",     "run", True),
-    ("csp_bypass",          "modules.csp_bypass",          "run", False),
-    ("xs_leaks",            "modules.xs_leaks",            "run", False),
-    ("host_header",         "modules.host_header",         "run", False),
-    ("cache_poison",        "modules.cache_poison",        "run", False),
-    ("web_cache_deception", "modules.web_cache_deception", "run", False),
-    ("http_desync",         "modules.http_desync",         "run", False),
-    ("http2_smuggling",     "modules.http2_smuggling",     "run", False),
-    ("race_condition",      "modules.race_condition",      "run", False),
-    ("business_logic",      "modules.business_logic",      "run", False),
-    ("custom_protocol",     "modules.custom_protocol",     "run", False),
-    ("browser_automation",  "modules.browser_automation",  "run", True),
+    # Auth
+    ("jwt_attack",          "modules.jwt_attack",          "run"),
+    ("oauth_test",          "modules.oauth_test",          "run"),
+    # Cloud
+    ("cloud_enum",          "modules.cloud_enum",          "run"),
+    ("cloud_metadata",      "modules.cloud_metadata",      "run"),
+    ("aws_deep",            "modules.aws_deep",            "run"),
+    ("gcp_deep",            "modules.gcp_deep",            "run"),
+    ("azure_deep",          "modules.azure_deep",          "run"),
+    ("docker_k8s_check",    "modules.docker_k8s_check",    "run"),
+    # API
+    ("graphql_test",        "modules.graphql_test",        "run"),
+    ("graphql_deep",        "modules.graphql_deep",        "run"),
+    ("open_api",            "modules.open_api",            "run"),
+    ("api_versioning",      "modules.api_versioning",      "run"),
+    # Infra
+    ("cname_takeover",      "modules.cname_takeover",      "run"),
+    ("host_header",         "modules.host_header",         "run"),
+    ("rdns",                "modules.rdns",                "run"),
+    # Injection
+    ("ssti",                "modules.ssti",                "run"),
+    ("xxe",                 "modules.xxe",                 "run"),
+    ("nosql",               "modules.nosql",               "run"),
+    ("ldap_injection",      "modules.ldap_injection",      "run"),
+    ("crlf_injection",      "modules.crlf_injection",      "run"),
+    ("email_header",        "modules.email_header",        "run"),
+    ("deserialization",     "modules.deserialization",     "run"),
+    # Protocol / Cache
+    ("http2_smuggling",     "modules.http2_smuggling",     "run"),
+    ("http_desync",         "modules.http_desync",         "run"),
+    ("cache_poison",        "modules.cache_poison",        "run"),
+    ("web_cache_deception", "modules.web_cache_deception", "run"),
+    # Client-side
+    ("prototype_pollution", "modules.prototype_pollution", "run"),
+    ("postmessage",         "modules.postmessage",         "run"),
+    ("dom_clobbering",      "modules.dom_clobbering",      "run"),
+    ("css_injection",       "modules.css_injection",       "run"),
+    ("dangling_markup",     "modules.dangling_markup",     "run"),
+    ("csp_bypass",          "modules.csp_bypass",          "run"),
+    ("xs_leaks",            "modules.xs_leaks",            "run"),
+    # Other
+    ("sensitive_files",     "modules.sensitive_files",     "run"),
+    ("bypass_403",          "modules.bypass_403",          "run"),
+    ("diff_analysis",       "modules.diff_analysis",       "run"),
+    ("race_condition",      "modules.race_condition",      "run"),
+    ("business_logic",      "modules.business_logic",      "run"),
+    ("custom_protocol",     "modules.custom_protocol",     "run"),
+    ("browser_automation",  "modules.browser_automation",  "run"),
+    # Generators
+    ("auto_dork",           "modules.auto_dork",           "run"),
+    ("nuclei_template_gen", "modules.nuclei_template_gen", "run"),
 ]
 
 
+# ─────────────────────────────────────────
+# Safe module runner
+# ─────────────────────────────────────────
 def _safe_run_module(name: str, module_path: str, attr: str,
-                     domain: str, output_root: str,
-                     scan_id: int) -> dict:
-    """
-    Import + invoke a module; never let one module's failure stop the others.
-    """
+                     domain: str, output_root: str, scan_id: int) -> dict:
     try:
         mod = __import__(module_path, fromlist=[attr])
         fn = getattr(mod, attr)
-        result = fn(domain=domain, output_root=output_root, scan_id=scan_id)
-        return result or {}
-    except TypeError:
-        # Some modules don't accept scan_id
         try:
-            mod = __import__(module_path, fromlist=[attr])
-            fn = getattr(mod, attr)
-            return fn(domain=domain, output_root=output_root) or {}
-        except Exception as e:
-            log.debug(f"module {name} fallback failed: {e}")
-            return {}
+            result = fn(domain=domain, output_root=output_root, scan_id=scan_id)
+        except TypeError:
+            result = fn(domain=domain, output_root=output_root)
+        return result or {}
+    except ImportError as e:
+        log.debug(f"module {name} import failed: {e}")
+        return {"error": f"import: {e}"}
     except Exception as e:
         log.debug(f"module {name} failed: {e}")
         warn(f"module {name}: {e}")
-        return {}
+        return {"error": str(e)}
 
 
+# ─────────────────────────────────────────
+# Phase runners
+# ─────────────────────────────────────────
 def run_recon(domain: str, output_root: str, scan_id: int) -> dict:
     try:
         from recon.recon import full_recon
-        return full_recon(domain, output_root=output_root,
-                          deep=False, scan_id=scan_id)
+        return full_recon(domain, output_root=output_root, deep=False, scan_id=scan_id)
     except Exception as e:
         err(f"recon failed: {e}")
         return {}
@@ -117,9 +182,8 @@ def run_scanner(domain: str, output_root: str, scan_id: int,
 def run_intel(domain: str, output_root: str) -> dict:
     try:
         from intel.intel_merger import run_full_intel
-        tech_stack = f"{output_root}/{domain}/recon/tech_stack.json"
-        return run_full_intel(domain, output_root,
-                              tech_stack_json=tech_stack)
+        tech = f"{output_root}/{domain}/recon/tech_stack.json"
+        return run_full_intel(domain, output_root, tech_stack_json=tech)
     except Exception as e:
         warn(f"intel failed: {e}")
         return {}
@@ -131,15 +195,16 @@ def run_advanced_modules(domain: str, output_root: str,
     selected_names = set(selected) if selected else None
 
     banner("ADVANCED MODULES")
-    for name, path, attr, _needs_params in MODULE_REGISTRY:
+    for name, path, attr in MODULE_REGISTRY:
         if selected_names and name not in selected_names:
             continue
         info(f"→ {name}")
         r = _safe_run_module(name, path, attr, domain, output_root, scan_id)
-        count = 0
-        if isinstance(r, dict):
-            count = r.get("count") or len(r.get("findings", []) or [])
-        results[name] = {"count": count}
+        count = r.get("count", 0) if isinstance(r, dict) else 0
+        results[name] = {
+            "count": count,
+            "error": r.get("error") if isinstance(r, dict) else None
+        }
         if count:
             ok(f"{name}: {count} finding(s)")
         else:
@@ -148,120 +213,272 @@ def run_advanced_modules(domain: str, output_root: str,
     return results
 
 
-def run_triage(domain: str, scan_id: int) -> dict:
-    """Optional: ask AI to triage pending findings."""
+# ─────────────────────────────────────────
+# AI Proof (auto-verify findings)
+# ─────────────────────────────────────────
+def run_proof_phase(domain: str, output_root: str, scan_id: int,
+                    max_proofs: int = 20) -> dict:
+    """
+    Auto-prove findings before triage/reports.
+    """
+    result = {}
     try:
-        from core.ai_engine import is_ai_available, triage_finding
+        from core.ai_proof import prove_findings
+        db = get_db()
+        findings = db.get_findings(scan_id)
+        if not findings:
+            return {"proven": 0, "unconfirmed": 0, "needs_review": 0}
+
+        info(f"Proving {min(len(findings), max_proofs)} findings...")
+        result = prove_findings(findings, output_root, max_proofs=max_proofs)
+        ok(f"Proof: {result.get('proven', 0)} proven, "
+           f"{result.get('unconfirmed', 0)} unconfirmed, "
+           f"{result.get('needs_review', 0)} need review")
+
+        # Mark PROVEN findings as confirmed
+        for d in result.get("details", []):
+            if d["verdict"] == "PROVEN":
+                for f in findings:
+                    if (f.get("url") == d["url"]
+                            and f.get("vuln_type") == d["vuln_type"]):
+                        try:
+                            db.update_finding_status(
+                                f["id"], "confirmed",
+                                confidence=d.get("confidence", 0)
+                            )
+                        except Exception:
+                            pass
+    except Exception as e:
+        warn(f"Proof phase failed: {e}")
+        result = {"error": str(e)}
+
+    return result
+
+
+# ─────────────────────────────────────────
+# AI Triage (with checkpoint integration)
+# ─────────────────────────────────────────
+def run_triage(domain: str, scan_id: int,
+               use_feedback: bool = True,
+               use_self_critique: bool = False) -> dict:
+    """
+    AI triage of pending findings.
+    Critical findings → queued for manual approval.
+    """
+    try:
+        from core.ai_engine import is_ai_available, ask_ai
     except Exception:
         return {"skipped": "ai_engine unavailable"}
-
     if not is_ai_available():
         return {"skipped": "no AI key configured"}
 
     db = get_db()
     findings = db.get_findings(scan_id, status="pending")
-    triaged = 0
-    for f in findings[:50]:
+    if not findings:
+        return {"triaged": 0, "queued": 0}
+
+    if use_feedback:
         try:
-            res = triage_finding(f)
-            if not res:
-                continue
-            verdict = res.get("verdict", "uncertain")
-            new_status = {
-                "true_positive": "confirmed",
-                "false_positive": "false_positive",
-            }.get(verdict, "pending")
-            if new_status != "pending":
-                db.update_finding_status(f["id"], new_status,
-                                         confidence=res.get("confidence", 0))
+            from core.ai_feedback import get_ai_feedback
+            get_ai_feedback()
+        except Exception:
+            pass
+
+    triaged = 0
+    queued = 0
+
+    for f in findings[:100]:
+        prompt = (
+            "Analyze this finding and return JSON with "
+            '{"verdict": "true_positive"|"false_positive"|"uncertain", '
+            '"severity": "critical|high|medium|low|info", '
+            '"confidence": 0-100, "reasoning": "...", "next_step": "..."}:\n\n'
+            + json.dumps(f, ensure_ascii=False)[:2500]
+        )
+
+        res = ask_ai(prompt, json_mode=True, timeout=60,
+                     enable_cot=use_self_critique)
+        if not res:
+            continue
+
+        verdict = res.get("verdict", "uncertain")
+        severity = res.get("severity", f.get("severity", "medium"))
+        conf = res.get("confidence", 50)
+
+        # Critical → checkpoint
+        if requires_manual_approval(severity):
+            try:
+                from core.ai_checkpoint import queue_critical
+                queue_critical({
+                    "vuln_type": f.get("vuln_type"),
+                    "severity": severity,
+                    "url": f.get("url"),
+                    "param": f.get("param"),
+                    "payload": f.get("payload"),
+                    "evidence": f.get("evidence"),
+                    "ai_reasoning": res.get("reasoning"),
+                    "ai_next_step": res.get("next_step"),
+                    "host": f.get("host", ""),
+                }, source="triage")
+                queued += 1
+            except Exception as e:
+                log.debug(f"checkpoint failed: {e}")
+            continue
+
+        new_status = {
+            "true_positive": "confirmed",
+            "false_positive": "false_positive",
+        }.get(verdict, "pending")
+
+        if new_status != "pending":
+            try:
+                db.update_finding_status(f["id"], new_status, confidence=conf)
                 triaged += 1
-        except Exception as e:
-            log.debug(f"triage failed: {e}")
-    return {"triaged": triaged, "total": len(findings)}
+            except Exception as e:
+                log.debug(f"db update failed: {e}")
+
+        if use_feedback:
+            try:
+                from core.ai_feedback import record_accepted, record_rejected
+                if verdict == "true_positive":
+                    record_accepted("triage", prompt[:500], res)
+                elif verdict == "false_positive":
+                    record_rejected("triage", prompt[:500], res)
+            except Exception:
+                pass
+
+    return {
+        "triaged": triaged,
+        "queued_for_manual": queued,
+        "total_pending": len(findings),
+    }
 
 
+# ─────────────────────────────────────────
+# Reports + Verification Queue
+# ─────────────────────────────────────────
 def run_reports(domain: str, output_root: str, scan_id: int,
                 use_ai: bool = True) -> list:
+    """
+    Generate reports, attach AI disclosure, queue for human verification.
+    """
+    reports = []
     try:
         from reporting.report import generate_reports
-        return generate_reports(domain, scan_id, output_root,
-                                only_severity=["critical", "high", "medium"],
-                                use_ai=use_ai)
+        reports = generate_reports(domain, scan_id, output_root,
+                                   only_severity=["critical", "high", "medium"],
+                                   use_ai=use_ai)
     except Exception as e:
         warn(f"report generation failed: {e}")
         return []
 
+    if not reports:
+        return []
+
+    # Attach disclosure + queue for verification
+    try:
+        from core.ai_disclosure import attach_disclosure
+        from core.human_verification import queue_for_verification
+
+        queued = 0
+        for rp in reports:
+            try:
+                rp_path = Path(rp)
+                md = rp_path.read_text(encoding="utf-8")
+                md = attach_disclosure(md, platform="hackerone")
+                rp_path.write_text(md, encoding="utf-8")
+
+                # Derive finding info from filename
+                stem = rp_path.stem
+                parts = stem.split("_")
+                vuln_type = parts[1] if len(parts) > 1 else "unknown"
+                severity = parts[2] if len(parts) > 2 else "unknown"
+
+                queue_for_verification(str(rp_path), {
+                    "vuln_type": vuln_type,
+                    "severity": severity,
+                    "url": "",
+                    "host": domain,
+                })
+                queued += 1
+            except Exception as e:
+                log.debug(f"queue failed for {rp}: {e}")
+
+        if queued:
+            warn(f"{queued} report(s) queued for manual verification. "
+                 f"Run: python3 -m core.core --review-verify")
+    except Exception as e:
+        warn(f"verification queue failed: {e}")
+
+    return reports
+
 
 # ─────────────────────────────────────────
-# Master pipeline
+# Full pipeline
 # ─────────────────────────────────────────
 def full_pipeline(domain: str, output_root: str = "results",
                   with_intel: bool = True,
                   with_modules: bool = True,
+                  with_proof: bool = True,
                   with_triage: bool = True,
                   with_reports: bool = True,
+                  with_feedback: bool = True,
+                  with_self_critique: bool = False,
                   only_modules: list = None) -> dict:
-    """
-    End-to-end pipeline.
-    """
     banner(f"DREAM FRAMEWORK — FULL PIPELINE: {domain}")
 
     db = get_db()
     scan_id = db.start_scan(domain)
-    info(f"Scan #{scan_id}")
+    info(f"Scan #{scan_id} | AI mode: {get_ai_mode()}")
 
     started = datetime.utcnow()
 
-    # 1) RECON
+    # Optional time budget
     try:
-        recon = run_recon(domain, output_root, scan_id)
-    except Exception as e:
-        err(f"recon failed: {e}")
-        recon = {}
+        from core.time_budget import get_budget
+        budget = get_budget()
+        budget.start("total")
+    except Exception:
+        budget = None
 
-    # 2) SCANNER (nuclei/xss/sqli/js)
-    try:
-        scan = run_scanner(domain, output_root, scan_id)
-    except Exception as e:
-        err(f"scanner failed: {e}")
-        scan = {}
+    # 1) RECON
+    recon = run_recon(domain, output_root, scan_id)
+
+    # 2) SCANNER
+    scan = run_scanner(domain, output_root, scan_id)
 
     # 3) ADVANCED MODULES
     modules_result = {}
     if with_modules:
-        try:
-            modules_result = run_advanced_modules(domain, output_root, scan_id,
-                                                  selected=only_modules)
-        except Exception as e:
-            err(f"modules failed: {e}")
+        modules_result = run_advanced_modules(domain, output_root, scan_id,
+                                              selected=only_modules)
 
     # 4) INTEL
     intel_result = {}
     if with_intel:
-        try:
-            intel_result = run_intel(domain, output_root)
-        except Exception as e:
-            warn(f"intel failed: {e}")
+        intel_result = run_intel(domain, output_root)
 
-    # 5) TRIAGE
+    # 4.5) AI PROOF — verify findings before triage
+    proof_result = {}
+    if with_proof:
+        proof_result = run_proof_phase(domain, output_root, scan_id,
+                                       max_proofs=20)
+
+    # 5) AI TRIAGE
     triage_result = {}
     if with_triage:
-        try:
-            triage_result = run_triage(domain, scan_id)
-        except Exception as e:
-            warn(f"triage failed: {e}")
+        triage_result = run_triage(domain, scan_id,
+                                   use_feedback=with_feedback,
+                                   use_self_critique=with_self_critique)
 
-    # 6) REPORTS
+    # 6) REPORTS (with disclosure + verification queue)
     reports = []
     if with_reports:
-        try:
-            reports = run_reports(domain, output_root, scan_id)
-        except Exception as e:
-            warn(f"report gen failed: {e}")
+        reports = run_reports(domain, output_root, scan_id,
+                              use_ai=with_triage)
 
     # Finish
     db.finish_scan(scan_id, status="done")
-
     stats = db.stats(scan_id)
     duration = (datetime.utcnow() - started).total_seconds()
 
@@ -270,21 +487,31 @@ def full_pipeline(domain: str, output_root: str = "results",
         "domain": domain,
         "scan_id": scan_id,
         "duration_sec": duration,
+        "ai_mode": get_ai_mode(),
         "severity_stats": stats,
-        "reports_generated": reports,
+        "reports_generated": len(reports),
         "modules": modules_result,
+        "proof": proof_result,
         "triage": triage_result,
     }
     summary_path = Path(output_root) / domain / "pipeline_summary.json"
     ensure_dir(summary_path.parent)
     save_json(summary_path, summary)
 
+    # Final banner
     banner("PIPELINE COMPLETE")
     print(f"  Scan ID:        {scan_id}")
     print(f"  Duration:       {duration:.1f}s")
-    print(f"  Critical/High:  {stats.get('critical', 0)}/{stats.get('high', 0)}")
-    print(f"  Medium/Low:     {stats.get('medium', 0)}/{stats.get('low', 0)}")
+    print(f"  Critical:       {stats.get('critical', 0)}")
+    print(f"  High:           {stats.get('high', 0)}")
+    print(f"  Medium:         {stats.get('medium', 0)}")
     print(f"  Reports:        {len(reports)}")
+    if proof_result.get("proven"):
+        print(f"  Proven:         {proof_result.get('proven', 0)}")
+    if triage_result.get("queued_for_manual"):
+        print(f"  ⚠ Pending:      {triage_result['queued_for_manual']} critical (run --review)")
+    if reports:
+        print(f"  ⚠ Verify:       {len(reports)} report(s) queued (run --review-verify)")
     print(f"  Summary:        {summary_path}")
     print()
 
@@ -292,44 +519,89 @@ def full_pipeline(domain: str, output_root: str = "results",
 
 
 # ─────────────────────────────────────────
+# Review functions (manual checkpoints)
+# ─────────────────────────────────────────
+def run_review():
+    """Interactive review of critical findings."""
+    try:
+        from core.ai_checkpoint import review_interactive
+        review_interactive()
+    except Exception as e:
+        err(f"review failed: {e}")
+
+
+def run_verify():
+    """Interactive human verification of pending reports."""
+    try:
+        from core.human_verification import review_interactive
+        review_interactive()
+    except Exception as e:
+        err(f"verification failed: {e}")
+
+
+# ─────────────────────────────────────────
 # CLI
 # ─────────────────────────────────────────
 def main():
     p = argparse.ArgumentParser(
-        description="Dream Framework — Main Orchestrator",
+        description="Dream Framework — Main Orchestrator (FINAL)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
   python3 -m core.core --target example.com --full
   python3 -m core.core --target example.com --recon-only
-  python3 -m core.core --target example.com --modules ssti,xxe,sensitive_files
-  python3 -m core.core --target example.com --report-only --scan-id 3
+  python3 -m core.core --target example.com --modules jwt_attack,ssti
+  python3 -m core.core --review
+  python3 -m core.core --review-verify
+  python3 -m core.core --target example.com --full --ai-mode hybrid
         """
     )
-    p.add_argument("-t", "--target", required=True)
+    p.add_argument("-t", "--target", help="Target domain")
     p.add_argument("-o", "--output", default="results")
 
     mode = p.add_mutually_exclusive_group()
-    mode.add_argument("--full", action="store_true",
-                      help="recon + scan + modules + intel + triage + reports")
+    mode.add_argument("--full", action="store_true")
     mode.add_argument("--recon-only", action="store_true")
     mode.add_argument("--scan-only", action="store_true")
     mode.add_argument("--modules-only", action="store_true")
     mode.add_argument("--report-only", action="store_true")
+    mode.add_argument("--review", action="store_true")
+    mode.add_argument("--review-verify", action="store_true",
+                      help="Interactive human verification of pending reports")
 
     p.add_argument("--modules", default=None,
-                   help="comma-separated list of modules to run")
+                   help="comma-separated list of modules")
+    p.add_argument("--ai-mode", choices=["auto", "hybrid", "checkpoint"],
+                   default=None)
     p.add_argument("--no-intel", action="store_true")
+    p.add_argument("--no-proof", action="store_true")
     p.add_argument("--no-triage", action="store_true")
     p.add_argument("--no-reports", action="store_true")
-    p.add_argument("--no-ai", action="store_true",
-                   help="skip AI triage/polish")
+    p.add_argument("--no-feedback", action="store_true")
+    p.add_argument("--self-critique", action="store_true")
     p.add_argument("--scan-id", type=int, default=None)
 
     args = p.parse_args()
+
+    # Modes that don't need target
+    if args.review:
+        run_review()
+        return
+
+    if args.review_verify:
+        run_verify()
+        return
+
+    if not args.target:
+        err("--target is required (except for --review / --review-verify)")
+        sys.exit(1)
+
+    # Override AI mode if provided
+    if args.ai_mode:
+        cfg.data.setdefault("ai_mode", {})["default"] = args.ai_mode
+
     domain = args.target
     out = args.output
-
     db = get_db()
 
     try:
@@ -356,7 +628,7 @@ Examples:
             if sid is None:
                 err("--report-only requires --scan-id")
                 sys.exit(1)
-            files = run_reports(domain, out, sid, use_ai=not args.no_ai)
+            files = run_reports(domain, out, sid, use_ai=not args.no_triage)
             print(f"Generated {len(files)} report(s)")
 
         else:
@@ -366,8 +638,11 @@ Examples:
                 domain, out,
                 with_intel=not args.no_intel,
                 with_modules=True,
-                with_triage=not (args.no_triage or args.no_ai),
+                with_proof=not args.no_proof,
+                with_triage=not args.no_triage,
                 with_reports=not args.no_reports,
+                with_feedback=not args.no_feedback,
+                with_self_critique=args.self_critique,
                 only_modules=sel,
             )
 
