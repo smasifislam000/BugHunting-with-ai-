@@ -1,11 +1,3 @@
-
----
-
-# 📁 ফাইল ২/৩: `monitoring/ct_monitor.py`
-
-GitHub অ্যাপে `monitoring/ct_monitor.py` খুলুন → ✏️ Edit → সব মুছুন → নিচের কোড পেস্ট → Commit
-
-```python
 """
 monitoring/ct_monitor.py
 ------------------------
@@ -16,7 +8,7 @@ import json
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import List, Set, Dict, Optional
+from typing import List, Set, Dict
 
 from core.logger import get_logger, info, ok, warn
 from core.utils import safe_request, save_json, load_json, ensure_dir
@@ -25,21 +17,21 @@ from monitoring.alerts import alert_new_subdomains
 log = get_logger("ct_monitor")
 
 
-def _state_file(domain: str) -> Path:
+def _state_file(domain):
     return Path("results") / domain / "monitoring" / "ct_state.json"
 
 
-def _load_state(domain: str) -> Dict:
+def _load_state(domain):
     return load_json(_state_file(domain), {"known": [], "last_check": ""})
 
 
-def _save_state(domain: str, state: Dict) -> None:
+def _save_state(domain, state):
     p = _state_file(domain)
     ensure_dir(p.parent)
     save_json(p, state)
 
 
-def fetch_crt_sh(domain: str, timeout: int = 30) -> List[Dict]:
+def fetch_crt_sh(domain, timeout=30):
     url = "https://crt.sh/?q=%25." + domain + "&output=json"
     r = safe_request(url, timeout=timeout)
     if not r or r.status_code != 200:
@@ -52,8 +44,8 @@ def fetch_crt_sh(domain: str, timeout: int = 30) -> List[Dict]:
     return data if isinstance(data, list) else []
 
 
-def extract_domains(crt_entries: List[Dict]) -> Set[str]:
-    domains: Set[str] = set()
+def extract_domains(crt_entries):
+    domains = set()
     for entry in crt_entries:
         name_val = entry.get("name_value", "")
         common = entry.get("common_name", "")
@@ -65,7 +57,7 @@ def extract_domains(crt_entries: List[Dict]) -> Set[str]:
     return domains
 
 
-def check(domain: str) -> Dict:
+def check(domain):
     info("CT check for " + domain)
     entries = fetch_crt_sh(domain)
     if not entries:
@@ -73,7 +65,7 @@ def check(domain: str) -> Dict:
 
     current = extract_domains(entries)
     state = _load_state(domain)
-    known: Set[str] = set(state.get("known", []))
+    known = set(state.get("known", []))
     new_domains = sorted(current - known)
 
     state["known"] = sorted(known | current)
@@ -87,7 +79,7 @@ def check(domain: str) -> Dict:
         except Exception as e:
             log.debug("alert failed: " + str(e))
     else:
-        info("CT: no new domains (" + str(len(current)) + " total)")
+        info("CT: no new domains")
 
     return {
         "new": new_domains,
@@ -96,7 +88,7 @@ def check(domain: str) -> Dict:
     }
 
 
-def run_forever(domain: str, interval_minutes: int = 60) -> None:
+def run_forever(domain, interval_minutes=60):
     info("CT monitor started")
     while True:
         try:
