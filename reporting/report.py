@@ -23,7 +23,7 @@ cfg = get_config()
 
 
 # ─────────────────────────────────────────
-# Template (HackerOne)
+# HackerOne template
 # ─────────────────────────────────────────
 H1_TEMPLATE = """# {title}
 
