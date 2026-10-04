@@ -1,0 +1,95 @@
+name: Code Audit
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Run full audit
+        run: |
+          python - <<'PYEOF'
+          import ast
+          import sys
+          from pathlib import Path
+
+          skip = {'.git', '__pycache__', '.cache', 'snapshots', 'logs', 'results'}
+          problems = []
+          total = 0
+          clean = 0
+
+          for p in Path('.').rglob('*.py'):
+              if any(part in skip for part in p.parts):
+                  continue
+              total += 1
+              rel = str(p)
+
+              try:
+                  size = p.stat().st_size
+              except Exception as e:
+                  problems.append((rel, 'unreadable: ' + str(e)))
+                  continue
+
+              if size == 0:
+                  problems.append((rel, 'EMPTY (0 bytes)'))
+                  continue
+
+              try:
+                  src = p.read_text(encoding='utf-8', errors='ignore')
+              except Exception as e:
+                  problems.append((rel, 'read error: ' + str(e)))
+                  continue
+
+              try:
+                  ast.parse(src)
+              except SyntaxError as e:
+                  problems.append((rel, 'SYNTAX ERROR line ' + str(e.lineno) + ': ' + str(e.msg)))
+                  continue
+
+              if 'ENDOFFILE' in src:
+                  problems.append((rel, 'contains ENDOFFILE marker'))
+                  continue
+
+              if p.name != '__init__.py':
+                  tree = ast.parse(src)
+                  funcs = [n for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]
+                  classes = [n for n in ast.walk(tree) if isinstance(n, ast.ClassDef)]
+                  if not funcs and not classes:
+                      problems.append((rel, 'no functions or classes'))
+                      continue
+
+              clean += 1
+
+          print('=' * 60)
+          print('  Dream Framework - Full Code Audit')
+          print('=' * 60)
+          print()
+          print('Total Python files:', total)
+          print('Clean:', clean)
+          print('With issues:', len(problems))
+          print()
+
+          if problems:
+              print('=' * 60)
+              print('  PROBLEMS FOUND')
+              print('=' * 60)
+              for path, issue in problems:
+                  print('  ' + path)
+                  print('      -> ' + issue)
+              print()
+              sys.exit(1)
+
+          print('=' * 60)
+          print('  ALL FILES ARE CLEAN - READY FOR HUNTING')
+          print('=' * 60)
+          PYEOF
