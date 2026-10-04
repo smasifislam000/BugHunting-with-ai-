@@ -1,4 +1,3 @@
-cat > core/poc_enhancer.py << 'ENDOFFILE'
 """
 core/poc_enhancer.py
 --------------------
@@ -345,4 +344,3 @@ if __name__ == "__main__":
         print(json.dumps({k: type(v).__name__ for k, v in r.items()}, indent=2))
     else:
         print("Provide --evidence and --output")
-ENDOFFILE
