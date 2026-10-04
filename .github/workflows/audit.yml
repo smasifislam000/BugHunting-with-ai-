@@ -23,16 +23,25 @@ jobs:
           import sys
           from pathlib import Path
 
-          skip = {'.git', '__pycache__', '.cache', 'snapshots', 'logs', 'results'}
+          skip_dirs = {'.git', '__pycache__', '.cache', 'snapshots', 'logs', 'results'}
+          skip_files = {
+              'burp/burp_extension.py',
+          }
+
           problems = []
           total = 0
           clean = 0
+          skipped = 0
 
           for p in Path('.').rglob('*.py'):
-              if any(part in skip for part in p.parts):
+              if any(part in skip_dirs for part in p.parts):
                   continue
+              rel = str(p).replace('\\', '/')
+              if rel in skip_files:
+                  skipped += 1
+                  continue
+
               total += 1
-              rel = str(p)
 
               try:
                   size = p.stat().st_size
@@ -41,7 +50,7 @@ jobs:
                   continue
 
               if size == 0:
-                  problems.append((rel, 'EMPTY (0 bytes)'))
+                  problems.append((rel, 'EMPTY'))
                   continue
 
               try:
@@ -53,7 +62,7 @@ jobs:
               try:
                   ast.parse(src)
               except SyntaxError as e:
-                  problems.append((rel, 'SYNTAX ERROR line ' + str(e.lineno) + ': ' + str(e.msg)))
+                  problems.append((rel, 'SYNTAX line ' + str(e.lineno) + ': ' + str(e.msg)))
                   continue
 
               if 'ENDOFFILE' in src:
@@ -77,6 +86,7 @@ jobs:
           print('Total Python files:', total)
           print('Clean:', clean)
           print('With issues:', len(problems))
+          print('Skipped (Jython):', skipped)
           print()
 
           if problems:
