@@ -1,33 +1,152 @@
-# Dream Framework
+{
+  "system": {
+    "version": "2.0.0",
+    "workspace": ".",
+    "results_dir": "results",
+    "logs_dir": "logs",
+    "database": "bug_bounty.db"
+  },
 
-AI-powered bug bounty hunting framework — built for serious hunters.
+  "ai_driver": {
+    "supported_agents": [
+      "claude-code",
+      "commandcode",
+      "opencode",
+      "cursor",
+      "aider",
+      "goose"
+    ],
+    "internal_ai_optional": {
+      "enabled": true,
+      "provider": "commandcode",
+      "providers": {
+        "commandcode": {
+          "api_key": "PASTE_YOUR_COMMANDCODE_KEY_HERE",
+          "base_url": "https://api.commandcode.ai/provider/v1",
+          "model": "command-r-plus"
+        },
+        "deepseek": {
+          "api_key": "PASTE_YOUR_DEEPSEEK_KEY_HERE",
+          "base_url": "https://api.deepseek.com/v1",
+          "model": "deepseek-chat"
+        },
+        "openai": {
+          "api_key": "",
+          "base_url": "https://api.openai.com/v1",
+          "model": "gpt-4o-mini"
+        },
+        "anthropic": {
+          "api_key": "",
+          "base_url": "https://api.anthropic.com/v1",
+          "model": "claude-3-5-sonnet-20241022"
+        }
+      }
+    }
+  },
 
-![Status](https://img.shields.io/badge/status-production--ready-brightgreen)
-![Python](https://img.shields.io/badge/python-3.10+-blue)
-![License](https://img.shields.io/badge/license-MIT-yellow)
+  "external_cli": {
+    "enabled": true,
+    "preferred_cli": "opencode",
+    "available_clis": [
+      "opencode",
+      "claude",
+      "aider",
+      "goose",
+      "cursor"
+    ],
+    "auto_detect": true
+  },
 
----
+  "api_keys": {
+    "shodan": "",
+    "censys_id": "",
+    "censys_secret": "",
+    "virustotal": "",
+    "securitytrails": "",
+    "chaos": "",
+    "github_token": "",
+    "nvd": ""
+  },
 
-## 🎯 Overview
+  "burp": {
+    "enabled": true,
+    "mode": "mcp",
+    "mcp_host": "127.0.0.1",
+    "mcp_port": 9876,
+    "collaborator": {
+      "enabled": true
+    },
+    "match_replace_rules": "burp/match_replace.yaml",
+    "rest_api": {
+      "enabled": false,
+      "url": "http://127.0.0.1:1337",
+      "api_key": ""
+    }
+  },
 
-Dream Framework is a modular, AI-powered bug bounty hunting framework.
-It chains reconnaissance, scanning, exploitation, and reporting into
-a single automated pipeline while keeping human-in-the-loop for
-critical decisions.
+  "scan_settings": {
+    "max_concurrent": 20,
+    "nuclei_rate_limit": 70,
+    "nuclei_severity": [
+      "critical",
+      "high",
+      "medium"
+    ],
+    "nuclei_exclude_tags": [
+      "fuzz",
+      "dos",
+      "brute-force"
+    ],
+    "httpx_threads": 50,
+    "request_timeout": 10,
+    "retry_count": 3,
+    "user_agent": "Mozilla/5.0 (compatible; DreamFramework/2.0)"
+  },
 
-**Key Stats:**
-- 139 Python files
-- 48 vulnerability modules
-- 4 AI providers supported (CommandCode, DeepSeek, OpenAI, Anthropic)
-- Multi-layer caching for 60-80% token savings
-- Parallel AI calls for 5-10x speedup
+  "ai_mode": {
+    "default": "auto"
+  },
 
----
+  "ai_performance": {
+    "use_fast_engine": true,
+    "enable_cache": true,
+    "enable_parallel": true,
+    "max_parallel_calls": 5,
+    "cache_ttl_hours": 168,
+    "enable_cot": true,
+    "enable_few_shot": true,
+    "token_budget_per_scan": 100000
+  },
 
-## 🚀 Quick Start
+  "modules": {
+    "enabled_by_default": [
+      "recon",
+      "scanner"
+    ],
+    "optional": []
+  },
 
-### 1. Install dependencies
+  "reporting": {
+    "format": "hackerone",
+    "auto_generate": true,
+    "min_severity": "medium",
+    "output_dir": "reports"
+  },
 
-```bash
-pip3 install -r requirements.txt --break-system-packages
-pip3 install aiohttp --break-system-packages
+  "monitoring": {
+    "discord_webhook": "",
+    "telegram_bot_token": "",
+    "telegram_chat_id": ""
+  },
+
+  "safety": {
+    "respect_scope": true,
+    "rate_limit_per_host": 30,
+    "max_requests_per_host": 10000
+  },
+
+  "proxy": {
+    "proxies": [],
+    "tor_enabled": false
+  }
+}
